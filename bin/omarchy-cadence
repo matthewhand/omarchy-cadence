@@ -191,9 +191,12 @@ while true; do
       flags_arg="--random-effect"
     fi
     clear
+    # ttfx is `ttfx [OPTIONS] [COMMAND]`, so the effect subcommand named by
+    # $flags_arg must come last, after every global option. Putting it earlier
+    # makes ttfx reject the trailing options with "unexpected argument".
     # shellcheck disable=SC2086
     ttfx -i "$art" --frame-rate 120 --canvas-width 0 --canvas-height 0 --reuse-canvas \
-      --anchor-canvas c --anchor-text c $flags_arg --no-eol --no-restore-cursor &
+      --anchor-canvas c --anchor-text c --no-eol --no-restore-cursor $flags_arg &
     ttfx_pid=$!
   else
     # Skip to the next slide at once rather than holding a blank screen for a
