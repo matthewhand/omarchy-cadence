@@ -1,0 +1,27 @@
+# Cadence screensaver slides: rotates through these, one per `interval` seconds.
+#   text PATH | image PATH | exec COMMAND | notify | set KEY=VALUE
+# An exec slide may write ttfx arguments to $CADENCE_FLAGS to pick its own
+# animation and colour for that rotation. See ~/omarchy.local/DESIGN.md.
+
+set interval=20
+set mode=block
+set width=80
+set height=26
+set notify_cycles=6
+
+# 1. Static word art.
+text ~/.config/omarchy/branding/screensaver.txt
+
+# 2. Image, transcoded to ASCII and cached by mtime. Skipped until grok
+#    delivers the SVG.
+image ~/Pictures/dragon-lineart.svg braille
+
+# 3. Clock, date and weather, re-rendered every rotation.
+exec python3 ~/.config/omarchy/screensaver/stats-slide.py
+
+# 4. herdr agent status, coloured by whether agents are waiting, busy or idle.
+#    Skipped when herdr is not running.
+exec python3 ~/.config/omarchy/screensaver/herdr-slide.py
+
+# 5. Newest desktop notification, kept for notify_cycles rotations.
+notify
