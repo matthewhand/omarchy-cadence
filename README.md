@@ -58,6 +58,7 @@ o.bind("SUPER + SHIFT + C", "Cadence screensaver", "omarchy-launch-cadence")
 |---|---|
 | `text PATH` | ASCII art file, used as is |
 | `image PATH [MODE]` | PNG or SVG transcoded by `omarchy-transcode-ascii`, cached by mtime. `MODE` is `block` or `braille` |
+| `images DIR [MODE]` | every image in `DIR`, in name order, as its own slide |
 | `exec COMMAND` | stdout becomes the art, re-run every rotation |
 | `notify` | newest queued desktop notification, kept for `notify_cycles` rotations |
 | `set KEY=VALUE` | `interval`, `mode`, `width`, `height`, `effects`, `notify_cycles` |
@@ -65,12 +66,17 @@ o.bind("SUPER + SHIFT + C", "Cadence screensaver", "omarchy-launch-cadence")
 Missing or exhausted slides are skipped rather than left blank, so a missing
 image or an empty notification queue will not break the show.
 
+`images` watches the directory: drop a new file in and it joins the rotation
+within about 20 seconds, with no restart. Your folder is never written to --
+every transcode lands in `~/.cache/omarchy/cadence/`, keyed by source path,
+mtime and mode, so an unchanged image is transcoded once and then reused.
+
 ```conf
 set interval=20
 set notify_cycles=6
 
 text ~/.config/omarchy/branding/screensaver.txt
-image ~/Pictures/dragon-lineart.svg braille
+images ~/Pictures/cadence-slides braille
 exec python3 ~/.config/omarchy/screensaver/stats-slide.py
 exec python3 ~/.config/omarchy/screensaver/herdr-slide.py
 notify

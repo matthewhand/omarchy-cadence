@@ -1,0 +1,272 @@
+#!/bin/bash
+
+# omarchy-screensaver-cadence -- a living, rotating ASCII display for Omarchy.
+#
+# Fork of /usr/share/omarchy/bin/omarchy-screensaver. Window, cursor and input
+# handling are unchanged; the difference is where the art comes from. Upstream
+# always animates the single file ~/.config/omarchy/branding/screensaver.txt,
+# which cannot vary between text art, an image, live data and notifications.
+#
+# A fork needs its own name rather than shadowing omarchy-screensaver, because
+# /usr/share/omarchy/bin is first in PATH and ~/.local/bin is much later.
+# omarchy-launch-screensaver therefore still starts the upstream screensaver;
+# this is launched directly (SUPER+SHIFT+C).
+#
+# Slide list syntax, one entry per line, '#' starts a comment:
+#   text PATH      ASCII art file, used as-is
+#   image PATH     PNG/SVG transcoded with omarchy-transcode-ascii, cached by mtime
+#   exec COMMAND   stdout becomes the art, re-run on every rotation
+#   notify         newest queued desktop notification, kept for `notify_cycles`
+#   set KEY=VALUE  interval, mode, width, height, effects, notify_cycles
+#
+# An exec slide may also write ttfx arguments to $CADENCE_FLAGS to control the
+# animation for that rotation. ttfx picks its effect and gradient when it starts
+# and cannot change them mid-run, so a slide that wants a particular colour has
+# to be started with that colour. A slide that writes no flags gets --random-effect.
+#
+# Missing, empty or exhausted slides are skipped, so a pending image or an empty
+# notification queue will not break the show.
+
+set -uo pipefail
+
+SLIDES_CONF="${OMARCHY_SCREENSAVER_SLIDES:-$HOME/.config/omarchy/screensaver/slides}"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/cadence"
+HELPERS="$HOME/.config/omarchy/screensaver"
+
+interval=20
+mode=block
+width=80
+height=26
+effects=""
+notify_cycles=8
+dir_stamp=""
+
+QUEUE="$CACHE_DIR/notifications.jsonl"
+
+slide_specs=()
+watch_dirs=()
+
+expand_tilde() { printf '%s' "${1/#\~/$HOME}"; }
+
+parse_conf() {
+  local line kind value dir dir_mode found
+  slide_specs=()
+  watch_dirs=()
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ -z "$line" ]] && continue
+    read -r kind value <<<"$line"
+    case "$kind" in
+      set)
+        case "${value%%=*}" in
+          interval) interval="${value#*=}" ;;
+          mode) mode="${value#*=}" ;;
+          width) width="${value#*=}" ;;
+          height) height="${value#*=}" ;;
+          effects) effects="${value#*=}" ;;
+          notify_cycles) notify_cycles="${value#*=}" ;;
+        esac
+        ;;
+      text | image | exec | notify) slide_specs+=("$kind $value") ;;
+      images)
+        # A whole directory of images, expanded to one slide per file in name
+        # order. Nothing is written back into that directory: every transcode
+        # lands in the cache, keyed by source path, mtime and mode.
+        dir="$(expand_tilde "${value%% *}")"
+        dir_mode=""
+        [[ "$value" == *[[:space:]]* ]] && dir_mode="${value##* }"
+        watch_dirs+=("$dir")
+        while IFS= read -r found; do
+          if [[ -n "$dir_mode" ]]; then
+            slide_specs+=("image $found $dir_mode")
+          else
+            slide_specs+=("image $found")
+          fi
+        done < <(find "$dir" -maxdepth 1 -type f \
+          \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \
+             -o -iname '*.svg' -o -iname '*.webp' \) 2>/dev/null | sort)
+        ;;
+      *) printf 'omarchy-screensaver-cadence: ignoring unknown entry: %s\n' "$line" >&2 ;;
+    esac
+  done <"$SLIDES_CONF"
+}
+
+# Render one slide to a file and echo its path. Returns 1 if the slide cannot be
+# produced, so the caller can skip it instead of showing a blank screen.
+materialise() {
+  local index=$1 spec kind arg out key flags slide_mode
+  spec="${slide_specs[$index]}"
+  kind="${spec%% *}"
+  arg="$(expand_tilde "${spec#* }")"
+  out="$CACHE_DIR/slide-$index.txt"
+  flags="$CACHE_DIR/slide-$index.flags"
+  rm -f "$flags"
+
+  case "$kind" in
+    text)
+      [[ -r "$arg" ]] || return 1
+      cp "$arg" "$out" || return 1
+      ;;
+    image)
+      # Optional per-slide mode override: `image PATH braille`. Braille samples
+      # 2x4 dots per cell against block's 2x1, so line art and fine detail
+      # survive the downsample that block mode flattens into a solid mass.
+      slide_mode="$mode"
+      if [[ "$arg" =~ ^(.*)[[:space:]]+(braille|block)$ ]]; then
+        arg="${BASH_REMATCH[1]}"
+        slide_mode="${BASH_REMATCH[2]}"
+      fi
+      [[ -r "$arg" ]] || return 1
+      # Cache by source path so a rebuilt image is picked up, but an unchanged
+      # one is not re-transcoded on every rotation.
+      key="$CACHE_DIR/$(printf '%s' "$arg" | md5sum | cut -c1-12)-$slide_mode.txt"
+      if [[ ! -s "$key" || "$key" -nt "$arg" ]]; then
+        omarchy-transcode-ascii "$arg" "$key" \
+          -m "$slide_mode" -w "$width" -H "$height" >/dev/null 2>&1 || return 1
+      fi
+      cp "$key" "$out" || return 1
+      ;;
+    exec)
+      # eval so the slide may quote arguments; the config is the user's own file.
+      CADENCE_ART="$out" CADENCE_FLAGS="$flags" eval "$arg" >"$out" 2>/dev/null || true
+      ;;
+    notify)
+      CADENCE_QUEUE="$QUEUE" CADENCE_CYCLES="$notify_cycles" \
+        python3 "$HELPERS/notify-slide.py" >"$out" 2>/dev/null || true
+      ;;
+  esac
+
+  [[ -s "$out" ]] || return 1
+  printf '%s' "$out"
+}
+
+screensaver_in_focus() {
+  hyprctl activewindow -j | jq -e '.class == "org.omarchy.screensaver"' >/dev/null 2>&1
+}
+
+exit_cadence() {
+  hyprctl eval 'hl.config({ cursor = { invisible = false } })' &>/dev/null || hyprctl keyword cursor:invisible false &>/dev/null || true
+  pkill -x ttfx 2>/dev/null
+  pkill -f '[o]rg.omarchy.screensaver' 2>/dev/null
+  exit 0
+}
+
+trap exit_cadence SIGINT SIGTERM SIGHUP SIGQUIT
+
+[[ -r "$SLIDES_CONF" ]] || { printf 'omarchy-screensaver-cadence: no slide list at %s\n' "$SLIDES_CONF" >&2; exit 1; }
+mkdir -p "$CACHE_DIR"
+parse_conf
+
+# --dump prints every slide's art and exits, so the list can be checked without
+# taking over the screen.
+if [[ "${1:-}" == "--dump" ]]; then
+  for i in "${!slide_specs[@]}"; do
+    if art=$(materialise "$i"); then
+      printf -- '--- slide %d: %s ---\n' "$i" "${slide_specs[$i]}"
+      cat "$art"
+      flags="$CACHE_DIR/slide-$i.flags"
+      [[ -s "$flags" ]] && printf -- '    ttfx flags: %s\n' "$(cat "$flags")"
+    else
+      printf -- '--- slide %d: %s ---\n    SKIPPED (unreadable, empty or exhausted)\n' "$i" "${slide_specs[$i]}"
+    fi
+  done
+  exit 0
+fi
+
+# With no usable slides, behave exactly like upstream rather than showing nothing.
+if ((${#slide_specs[@]} == 0)); then
+  slide_specs=("text $HOME/.config/omarchy/branding/screensaver.txt")
+fi
+
+printf '\033]11;rgb:00/00/00\007' # Set background color to black
+
+hyprctl eval 'hl.config({ cursor = { invisible = true } })' &>/dev/null || hyprctl keyword cursor:invisible true &>/dev/null
+
+tty=$(tty 2>/dev/null)
+
+# Terminals allocate the pty at the default 80x24 and only resize it once the
+# compositor has told the window how big it is. ttfx measures the terminal once,
+# at startup, so starting it before the resize lands sizes an 80x24 canvas and
+# paints it into the corner of a fullscreen window.
+wait_for_terminal_resize() {
+  local deadline=$((SECONDS + 2))
+  while ((SECONDS < deadline)) && [[ $(stty size 2>/dev/null) == "24 80" ]]; do
+    sleep 0.02
+  done
+}
+
+wait_for_terminal_resize
+
+# Dropping a file into a watched directory changes its mtime, so re-parsing the
+# slide list is enough to notice. That keeps the folder the single place to add
+# images, with no restart and no reloading of the config by hand.
+rescan_if_changed() {
+  local current="" d
+  for d in "${watch_dirs[@]}"; do
+    current+="$d:$(stat -c %Y "$d" 2>/dev/null || echo 0)"
+  done
+  [[ "$current" == "$dir_stamp" ]] && return 1
+  dir_stamp="$current"
+  parse_conf
+  return 0
+}
+
+index=0
+failures=0
+next_rescan=$SECONDS
+while true; do
+  if ((SECONDS >= next_rescan)); then
+    next_rescan=$((SECONDS + 20))
+    rescan_if_changed && index=0
+  fi
+
+  art=""
+  if art=$(materialise "$index"); then
+    failures=0
+    slide_flags="$CACHE_DIR/slide-$index.flags"
+    if [[ -s "$slide_flags" ]]; then
+      flags_arg=$(cat "$slide_flags")
+    elif [[ -n "$effects" ]]; then
+      flags_arg="$effects"
+    else
+      flags_arg="--random-effect"
+    fi
+    clear
+    # ttfx is `ttfx [OPTIONS] [COMMAND]`, so the effect subcommand named by
+    # $flags_arg must come last, after every global option. Putting it earlier
+    # makes ttfx reject the trailing options with "unexpected argument".
+    # shellcheck disable=SC2086
+    ttfx -i "$art" --frame-rate 120 --canvas-width 0 --canvas-height 0 --reuse-canvas \
+      --anchor-canvas c --anchor-text c --no-eol --no-restore-cursor $flags_arg &
+    ttfx_pid=$!
+  else
+    # Skip to the next slide at once rather than holding a blank screen for a
+    # whole interval. If every slide is unusable, fall back to waiting one
+    # interval so this cannot spin.
+    failures=$((failures + 1))
+    if ((failures >= ${#slide_specs[@]})); then
+      sleep "$interval"
+      failures=0
+    else
+      sleep 0.2
+    fi
+    index=$(((index + 1) % ${#slide_specs[@]}))
+    continue
+  fi
+
+  # One second-granularity poll so a keypress or focus loss still exits instantly,
+  # exactly as upstream does, while the slide is on screen.
+  deadline=$((SECONDS + interval))
+  while ((SECONDS < deadline)); do
+    if read -n1 -t 1 || ! screensaver_in_focus; then
+      exit_cadence
+    fi
+    ! kill -0 "$ttfx_pid" 2>/dev/null && break
+  done
+
+  kill "$ttfx_pid" 2>/dev/null
+  wait "$ttfx_pid" 2>/dev/null
+
+  index=$(((index + 1) % ${#slide_specs[@]}))
+done

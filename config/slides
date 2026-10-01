@@ -14,7 +14,7 @@ text ~/.config/omarchy/branding/screensaver.txt
 
 # 2. Image, transcoded to ASCII and cached by mtime. Skipped until grok
 #    delivers the SVG.
-image ~/Pictures/smiley-crossed-eyes.svg braille
+images ~/Pictures/cadence-slides braille
 
 # 3. Clock, date and weather, re-rendered every rotation.
 exec python3 ~/.config/omarchy/screensaver/stats-slide.py
