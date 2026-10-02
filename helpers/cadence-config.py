@@ -185,8 +185,14 @@ def resolve(config, state):
     # Only add the implicit notification slide when the config has not already
     # listed one. Appending it after a `group` marker would silently file it under
     # whichever group was declared last, which is how it ended up in fallback too.
-    if notifications_enabled and "notify" not in lines:
-        lines.append("notify")
+    if notifications_enabled:
+        if "notify" not in lines:
+            lines.append("notify")
+    else:
+        # The toggle governs notifications wherever they are listed. Without this,
+        # `primary: [notify]` kept emitting a notification slide even with the
+        # toggle off, because only the implicit append was conditional.
+        lines = [line for line in lines if line != "notify"]
 
     # Count what actually became a slide, so --check and the widget never claim a
     # slide that was skipped for a missing file.

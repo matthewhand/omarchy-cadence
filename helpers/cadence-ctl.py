@@ -103,11 +103,17 @@ def status():
 
 
 def screensaver_running():
-    try:
-        out = subprocess.run(["pgrep", "-x", "ttfx"], capture_output=True, timeout=5)
-        return out.returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
-        return False
+    # ttfx is not a continuous signal: a short effect finishes and cadence rotates,
+    # so there are gaps with no ttfx at all. The runner process is the honest test
+    # for "the screensaver is up".
+    for probe in (["pgrep", "-f", "bin/omarchy-screensaver-cadence"],):
+        try:
+            out = subprocess.run(probe, capture_output=True, timeout=5)
+            if out.returncode == 0:
+                return True
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+    return False
 
 
 def main():

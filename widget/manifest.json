@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "matthewh.cadence",
+  "name": "Cadence",
+  "version": "0.1.0",
+  "author": "matthewh",
+  "license": "MIT",
+  "description": "Bar widget for omarchy-screensaver-cadence: slide count, start/stop, notifications toggle, config editor",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "CadenceWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Cadence",
+    "description": "Rotating ASCII screensaver controls (right-click to edit the config)",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
