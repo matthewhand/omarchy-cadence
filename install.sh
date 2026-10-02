@@ -39,8 +39,16 @@ command -v omarchy-transcode-ascii >/dev/null || {
 
 mkdir -p "$bin" "$config" "$unit_dir"
 install -m 755 "$repo/bin/omarchy-screensaver-cadence" "$repo/bin/omarchy-launch-screensaver-cadence" "$bin/"
-install -m 644 "$repo/helpers/"*.py "$config/"
-echo "installed: $bin/omarchy-screensaver-cadence, $bin/omarchy-launch-screensaver-cadence"
+install -m 644 \
+  "$repo/helpers/cadence-config.py" \
+  "$repo/helpers/cadence-ctl.py" \
+  "$repo/helpers/herdr-slide.py" \
+  "$repo/helpers/notify-slide.py" \
+  "$repo/helpers/notify-watch.py" \
+  "$repo/helpers/stats-slide.py" \
+  "$repo/helpers/wordfont.py" \
+  "$config/"
+echo "installed: $bin/omarchy-screensaver-cadence, $bin/omarchy-launch-screensaver-cadence and helpers"
 
 if [[ -f "$config/cadence.yaml" ]]; then
   echo "kept existing config: $config/cadence.yaml"
@@ -49,10 +57,14 @@ else
   echo "installed config: $config/cadence.yaml"
 fi
 
-# The line format still works, but only as a fallback for configs that predate
-# cadence.yaml. Kept so an existing install does not lose its slide list.
-if [[ ! -f "$config/slides" && ! -f "$config/cadence.yaml" ]]; then
+# The line format remains an independent fallback when cadence.yaml cannot be
+# resolved (for example, when PyYAML is unavailable), so install it on a fresh
+# setup without replacing an existing user's list.
+if [[ -f "$config/slides" ]]; then
+  echo "kept existing fallback: $config/slides"
+else
   install -m 644 "$repo/config/slides" "$config/slides"
+  echo "installed fallback: $config/slides"
 fi
 
 if $with_widget; then
@@ -91,7 +103,7 @@ fi
 cat <<'EOF'
 
 Next:
-  1. Review the slide list:      ~/.config/omarchy/screensaver/slides
+  1. Review the primary config:   ~/.config/omarchy/screensaver/cadence.yaml
   2. Preview without fullscreen:  omarchy-screensaver-cadence --dump
   3. Start it:                    omarchy-launch-screensaver-cadence
 

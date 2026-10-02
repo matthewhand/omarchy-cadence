@@ -6,7 +6,7 @@ Omarchy's screensaver animates one static text file — `branding/screensaver.tx
 — with a random [ttfx](https://github.com/ntno/terminaltexteffects) effect. That
 is a fine default, but it is one file forever. Cadence is a fork that rotates
 through a **slide list** instead: static art, images, live data, agent status and
-desktop notifications, each with its own dwell time.
+desktop notifications, all rotating on a single global interval.
 
 Everything is user config only. Nothing in `/usr/share/omarchy` is modified, and
 your existing screensaver keeps working.
@@ -286,8 +286,9 @@ Then `omarchy-shell shell reload`. The escape hatch is
 - **Everything is sampled down hard.** A drawing at 1600x520 becomes about
   80x26 cells (braille: 160x104 dots). Solid silhouettes survive; thin detail and
   cursive script do not.
-- **80 columns by 26 rows** is the budget. Cadence refuses a slide that overruns
-  rather than letting it wrap.
+- **80 columns by 26 rows** is the budget. Width and height bounds are enforced
+  only for image transcoding; text and exec slides may produce output that
+  exceeds the budget and will be shown as-is.
 - **Idle still uses Omarchy's screensaver.** The idle trigger lives in a built-in
   shell plugin, so cadence is opt-in via the bind above.
 

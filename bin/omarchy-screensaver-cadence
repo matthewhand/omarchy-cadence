@@ -232,7 +232,11 @@ printf '\033]11;rgb:00/00/00\007' # Set background color to black
 
 hyprctl eval 'hl.config({ cursor = { invisible = true } })' &>/dev/null || hyprctl keyword cursor:invisible true &>/dev/null
 
-tty=$(tty 2>/dev/null)
+tty=$(tty 2>/dev/null) || tty=""
+if [[ -z "$tty" || ! -t 0 ]]; then
+  printf 'omarchy-screensaver-cadence: requires an interactive terminal\n' >&2
+  exit 1
+fi
 
 # Terminals allocate the pty at the default 80x24 and only resize it once the
 # compositor has told the window how big it is. ttfx measures the terminal once,

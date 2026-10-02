@@ -280,12 +280,12 @@ BarWidget {
         }
       }
 
-      MouseArea {
-        anchors.fill: parent
-        // Prints every slide's art to a terminal instead of taking over the
-        // screen, so a config change can be checked without a full screensaver.
-        onClicked: root.sh("omarchy-screensaver-cadence --dump | less -R")
-      }
+        MouseArea {
+          anchors.fill: parent
+          // Prints every slide's art to a terminal instead of taking over the
+          // screen, so a config change can be checked without a full screensaver.
+          onClicked: root.sh("omarchy-launch-floating-terminal-with-presentation " + shellQuote("bash -c 'omarchy-screensaver-cadence --dump | less -R'"))
+        }
     }
 
     Timer {
