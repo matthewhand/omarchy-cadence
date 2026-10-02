@@ -25,8 +25,8 @@ upstream. Cadence ships as a separate command instead, alongside the original.
 ## Install
 
 ```bash
-git clone https://github.com/matthewhand/omarchy-cadence
-cd omarchy-cadence
+git clone https://github.com/matthewhand/omarchy-screensaver-cadence
+cd omarchy-screensaver-cadence
 ./install.sh --with-watcher
 ```
 
