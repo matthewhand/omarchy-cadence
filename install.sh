@@ -14,9 +14,11 @@ config="$HOME/.config/omarchy/screensaver"
 unit_dir="$HOME/.config/systemd/user"
 
 with_watcher=false
+with_widget=false
 for arg in "$@"; do
   case "$arg" in
     --with-watcher) with_watcher=true ;;
+    --with-widget) with_widget=true ;;
     -h | --help)
       sed -n '2,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0
@@ -51,6 +53,29 @@ fi
 # cadence.yaml. Kept so an existing install does not lose its slide list.
 if [[ ! -f "$config/slides" && ! -f "$config/cadence.yaml" ]]; then
   install -m 644 "$repo/config/slides" "$config/slides"
+fi
+
+if $with_widget; then
+  # A bar widget is an Omarchy plugin, so it goes in the plugin directory and is
+  # registered with the shell rather than just copied somewhere.
+  plugin="$HOME/.config/omarchy/plugins/matthewh.cadence"
+  mkdir -p "$plugin"
+  install -m 644 "$repo/widget/manifest.json" "$repo/widget/CadenceWidget.qml" "$plugin/"
+  if command -v omarchy-shell-config >/dev/null; then
+    # Register through omarchy-shell-config rather than editing shell.json by hand:
+    # it is the supported path and keeps the bar layout intact. The jq program is
+    # the first argument; anything after it would be passed to jq as an argument.
+    (
+      source /usr/share/omarchy/bin/omarchy-shell-config
+      commit '.bar.layout.right = (((.bar.layout.right // []) | map(select(.id != "matthewh.cadence"))) + [{"id":"matthewh.cadence"}]) | .plugins = ((((.plugins // []) | map(select(.id != "matthewh.cadence"))) + [{"id":"matthewh.cadence"}]))'
+    ) >/dev/null 2>&1 && echo "registered matthewh.cadence in the bar" || {
+      echo "install: could not update shell.json; add the widget manually" >&2
+    }
+  fi
+  echo "installed bar widget: $plugin"
+else
+  echo "skipped the bar widget."
+  echo "  enable it with: ./install.sh --with-widget"
 fi
 
 if $with_watcher; then
