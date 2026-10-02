@@ -203,6 +203,57 @@ def resolve(config, state):
     return lines, emitted
 
 
+def strip_jsonc(text):
+    """Accept hand-edited JSONC: drop // and /* */ comments and trailing commas.
+
+    Python's json module rejects both, and this file is meant to be edited by a
+    human, so comments are worth allowing. Kept deliberately small and dependency
+    free rather than pulling in a JSONC parser.
+    """
+    out = []
+    index, length = 0, len(text)
+    in_string = escape = False
+    while index < length:
+        char = text[index]
+        if in_string:
+            out.append(char)
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            out.append(char)
+            index += 1
+            continue
+        if char == "/" and index + 1 < length and text[index + 1] == "/":
+            while index < length and text[index] != "\n":
+                index += 1
+            continue
+        if char == "/" and index + 1 < length and text[index + 1] == "*":
+            index += 2
+            while index + 1 < length and not (text[index] == "*" and text[index + 1] == "/"):
+                index += 1
+            index += 2
+            continue
+        out.append(char)
+        index += 1
+    import re as _re
+    return _re.sub(r",(\s*[}\]])", r"\1", "".join(out))
+
+
+def load_jsonc(path):
+    try:
+        with open(path) as handle:
+            return json.loads(strip_jsonc(handle.read()))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def load_yaml(path):
     try:
         import yaml
@@ -227,12 +278,8 @@ def load_yaml(path):
 
 
 def load_state(path):
-    try:
-        with open(path) as handle:
-            data = json.load(handle)
-        return data if isinstance(data, dict) else {}
-    except (OSError, json.JSONDecodeError):
-        return {}
+    data = load_jsonc(path)
+    return data if isinstance(data, dict) else {}
 
 
 def main():
@@ -240,7 +287,7 @@ def main():
     parser.add_argument("--config", default=os.path.expanduser(
         "~/.config/omarchy/screensaver/cadence.yaml"))
     parser.add_argument("--state", default=os.path.expanduser(
-        "~/.config/omarchy/screensaver/state.json"))
+        "~/.config/omarchy/screensaver/state.jsonc"))
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
 

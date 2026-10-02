@@ -22,7 +22,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.environ.get(
     "OMARCHY_SCREENSAVER_CONFIG", os.path.join(HERE, "cadence.yaml"))
-STATE = os.environ.get("OMARCHY_SCREENSAVER_STATE", os.path.join(HERE, "state.json"))
+STATE = os.environ.get("OMARCHY_SCREENSAVER_STATE", os.path.join(HERE, "state.jsonc"))
 PLAN = os.path.expanduser("~/.cache/omarchy/cadence/resolved.plan")
 
 BOOLEAN_KEYS = ("notifications_enabled",)
@@ -30,21 +30,127 @@ INT_KEYS = ("interval", "notify_cycles", "width", "height")
 STRING_KEYS = ("mode",)
 
 
-def load_state():
+def strip_jsonc(text):
+    """Accept hand-edited JSONC: drop // and /* */ comments and trailing commas.
+
+    Python's json module rejects both, and this file is meant to be edited by a
+    human, so comments are worth allowing. Kept deliberately small and dependency
+    free rather than pulling in a JSONC parser.
+    """
+    out = []
+    index, length = 0, len(text)
+    in_string = escape = False
+    while index < length:
+        char = text[index]
+        if in_string:
+            out.append(char)
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            out.append(char)
+            index += 1
+            continue
+        if char == "/" and index + 1 < length and text[index + 1] == "/":
+            while index < length and text[index] != "\n":
+                index += 1
+            continue
+        if char == "/" and index + 1 < length and text[index + 1] == "*":
+            index += 2
+            while index + 1 < length and not (text[index] == "*" and text[index + 1] == "/"):
+                index += 1
+            index += 2
+            continue
+        out.append(char)
+        index += 1
+    import re as _re
+    return _re.sub(r",(\s*[}\]])", r"\1", "".join(out))
+
+
+def load_jsonc(path):
     try:
-        with open(STATE) as handle:
-            data = json.load(handle)
-        return data if isinstance(data, dict) else {}
+        with open(path) as handle:
+            return json.loads(strip_jsonc(handle.read()))
     except (OSError, json.JSONDecodeError):
-        return {}
+        return None
+
+
+def load_state():
+    data = load_jsonc(STATE)
+    return data if isinstance(data, dict) else {}
 
 
 def save_state(data):
+    """Update keys in place so hand-written comments survive.
+
+    A json.load/json.dump round trip is simpler but rewrites the whole file, which
+    silently deletes every comment the user wrote in this JSONC file -- exactly what
+    the .jsonc choice was meant to avoid. So this edits surgically: known keys are
+    rewritten on their own line, unknown ones inserted before the closing brace,
+    and every other line (comments, blank lines, ordering) is left untouched.
+    """
+    import re
+
     os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    try:
+        with open(STATE) as handle:
+            lines = handle.read().splitlines()
+    except OSError:
+        lines = []
+
+    body = "\n".join(lines)
+
+    # Rewrite a key that already has its own line.
+    for position, line in enumerate(lines):
+        match = re.match(r'^(\s*)"([A-Za-z_][A-Za-z0-9_]*)"\s*:', line)
+        if match and match.group(2) in data:
+            key = match.group(2)
+            trailing = "," if line.rstrip().endswith(",") else ""
+            lines[position] = f'{match.group(1)}"{key}": {json.dumps(data[key])}{trailing}'
+            data.pop(key, None)
+            body = "\n".join(lines)
+            break
+
+    if not data:
+        return _write_state(lines)
+
+    # Anything left is new. Insert inside the object, never after the closing brace.
+    close = None
+    for position in range(len(lines) - 1, -1, -1):
+        if lines[position].strip() in ("}", "},"):
+            close = position
+            break
+
+    for key, value in data.items():
+        if f'"{key}"' in body:
+            continue
+        entry = f'  "{key}": {json.dumps(value)}'
+        if close is None:
+            lines.append(entry)
+            continue
+        if close > 0:
+            previous = lines[close - 1].rstrip()
+            # Never append a comma to a comment: it is stripped before parsing, so
+            # it is harmless, but rewriting someone's prose is rude.
+            is_comment = previous.lstrip().startswith(("//", "/*", "*"))
+            if previous and not is_comment and not previous.endswith((",", "{", "[")):
+                lines[close - 1] = previous + ","
+        lines.insert(close, entry)
+        close += 1
+
+    return _write_state(lines)
+
+
+def _write_state(lines):
     tmp = STATE + ".tmp"
     with open(tmp, "w") as handle:
-        json.dump(data, handle, indent=2, sort_keys=True)
-        handle.write("\n")
+        handle.write("\n".join(lines).rstrip("\n") + "\n")
     os.replace(tmp, STATE)
 
 

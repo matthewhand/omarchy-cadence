@@ -32,7 +32,7 @@ set -uo pipefail
 SLIDES_CONF="${OMARCHY_SCREENSAVER_SLIDES:-$HOME/.config/omarchy/screensaver/slides}"
 # YAML config, preferred when present. The line format above stays valid input.
 CONFIG_YAML="${OMARCHY_SCREENSAVER_CONFIG:-$HOME/.config/omarchy/screensaver/cadence.yaml}"
-STATE_FILE="${OMARCHY_SCREENSAVER_STATE:-$HOME/.config/omarchy/screensaver/state.json}"
+STATE_FILE="${OMARCHY_SCREENSAVER_STATE:-$HOME/.config/omarchy/screensaver/state.jsonc}"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/cadence"
 HELPERS="$HOME/.config/omarchy/screensaver"
 
