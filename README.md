@@ -27,15 +27,21 @@ upstream. Cadence ships as a separate command instead, alongside the original.
 ```bash
 git clone https://github.com/matthewhand/omarchy-screensaver-cadence
 cd omarchy-screensaver-cadence
-./install.sh --with-watcher
+./install.sh --with-watcher --with-widget
 ```
 
-`--with-watcher` is optional and only adds desktop notification slides. Nothing
-needs `sudo`.
+Nothing needs `sudo`: everything lands in `~/.local/bin` and
+`~/.config/omarchy/screensaver`.
+
+| Flag | Adds |
+|---|---|
+| `--with-watcher` | a systemd user service that queues desktop notifications for the `notify` slide |
+| `--with-widget` | the `matthewh.cadence` bar widget, registered in `shell.json` |
 
 Requires `ttfx`, `jq`, `hyprctl` and `omarchy-transcode-ascii` (all present on a
-normal Omarchy install). ImageMagick is optional, used by `helpers/wordfont.py`
-workflows to render banners.
+normal Omarchy install). `cadence.yaml` needs PyYAML; without it cadence falls
+back to the plain-text slide list. ImageMagick is optional and only used by the
+banner-making helpers.
 
 ## Use
 
@@ -50,21 +56,91 @@ Any key or click exits and restores the cursor. A suggested Hyprland bind:
 o.bind("SUPER + SHIFT + C", "Cadence screensaver", "omarchy-launch-screensaver-cadence")
 ```
 
-## Slides
+## Configuration
 
-`~/.config/omarchy/screensaver/slides`, one entry per line:
+`~/.config/omarchy/screensaver/cadence.yaml`:
 
-| Directive | Meaning |
+```yaml
+interval: 20              # seconds per slide
+mode: braille             # default render mode for images
+width: 80                 # terminal budget
+height: 26
+
+notifications:
+  enabled: true
+  cycles: 6               # a notification is shown this many times, then retires
+
+ascii:                    # one or more ASCII art files, used as-is
+  - ~/.config/omarchy/branding/screensaver.txt
+
+image:                    # one or more images
+  - ~/Pictures/logo.svg
+
+images:                   # one or more folders; drop a file in and it joins
+  - ~/Pictures/cadence-slides
+
+dynamic:                  # anything that prints ASCII to stdout
+  - command: python3 ~/.config/omarchy/screensaver/stats-slide.py
+```
+
+Comments are the point, so the config is YAML and the runtime toggles live
+somewhere else: `state.jsonc`, next to it. The bar widget's switches write there
+rather than editing your YAML, because rewriting YAML with PyYAML would drop every
+comment above. Delete `state.jsonc` to go back to what the config says.
+
+### primary and fallback
+
+`primary` rotates **on its own** while any of its slides can be produced. When none
+can, cadence rotates `fallback` instead of showing an empty screen. So a queued
+notification takes the screen when there is one, and the clock, images and word art
+come back when there is not:
+
+```yaml
+primary:
+  - notify
+
+fallback:
+  - command: python3 ~/.config/omarchy/screensaver/stats-slide.py
+  - images: ~/Pictures/cadence-slides
+  - ascii: ~/.config/omarchy/branding/screensaver.txt
+```
+
+If you use `primary` or `fallback`, the flat keys above are ignored, so the same
+entry never rotates twice.
+
+### Slide types
+
+| In YAML | Meaning |
 |---|---|
-| `text PATH` | ASCII art file, used as is |
-| `image PATH [MODE]` | PNG or SVG transcoded by `omarchy-transcode-ascii`, cached by mtime. `MODE` is `block` or `braille` |
-| `images DIR [MODE]` | every image in `DIR`, in name order, as its own slide |
-| `exec COMMAND` | stdout becomes the art, re-run every rotation |
-| `notify` | newest queued desktop notification, kept for `notify_cycles` rotations |
-| `set KEY=VALUE` | `interval`, `mode`, `width`, `height`, `effects`, `notify_cycles` |
+| `ascii: PATH` | ASCII art file, used as is |
+| `image: PATH` | PNG or SVG transcoded by `omarchy-transcode-ascii`, cached by mtime |
+| `images: DIR` | every image in `DIR`, in name order, watched live |
+| `dynamic:` → `command: CMD` | stdout becomes the art, re-run every rotation |
+| `notify` | newest queued desktop notification |
+
+Any entry may add `mode: block|braille` or `enabled: false`.
 
 Missing or exhausted slides are skipped rather than left blank, so a missing
-image or an empty notification queue will not break the show.
+image or an empty notification queue will not break the show. Editing
+`cadence.yaml` or flipping a bar toggle takes effect within about 20 seconds,
+without a restart.
+
+### The plain-text format still works
+
+`~/.config/omarchy/screensaver/slides` is still read when no `cadence.yaml`
+exists, one directive per line:
+
+```conf
+set interval=20
+set mode=braille
+text ~/.config/omarchy/branding/screensaver.txt
+images ~/Pictures/cadence-slides braille
+exec python3 ~/.config/omarchy/screensaver/stats-slide.py
+notify
+```
+
+Cadence resolves YAML into exactly this format before running, so there is one
+parser and both formats behave identically.
 
 `images` watches the directory: drop a new file in and it joins the rotation
 within about 20 seconds, with no restart. Your folder is never written to --
@@ -107,6 +183,8 @@ Written for this machine but generic enough to steal:
 | `herdr-slide.py` | [herdr](https://herdr.dev) agent states, coloured waiting / busy / idle. Skips if herdr is not running |
 | `notify-slide.py` | renders and retires queued notifications |
 | `notify-watch.py` | watches the notification bus and fills that queue |
+| `cadence-config.py` | resolves `cadence.yaml` into the plain-text plan |
+| `cadence-ctl.py` | status and switch state for the bar widget |
 | `wordfont.py` | 6x8 block font renderer shared by the helpers |
 
 ## Notifications
@@ -120,6 +198,29 @@ mako or dunst).
 Each notification carries a `seen` counter and stays queued until it has been
 shown `notify_cycles` times, so it lingers for several rotations instead of
 flashing past once. Entries expire after an hour.
+
+## Bar widget
+
+`--with-widget` installs `matthewh.cadence`, which shows the configured slide count
+and whether the screensaver is up, and offers:
+
+- **Start now / Stop**
+- **Notifications** toggle — writes `state.jsonc`, so your YAML and its comments
+  survive
+- **Edit cadence.yaml** — also on right-click of the bar icon
+- **Preview slides** — `--dump` into `less -R`, so you can check art without a
+  fullscreen takeover
+
+It polls `cadence-ctl.py status` and reports `running` from the runner process
+rather than from `ttfx`, because a short ttfx effect finishes and cadence rotates,
+leaving gaps where the screensaver is plainly up but no `ttfx` exists.
+
+`cadence-ctl.py` is also usable directly:
+
+```bash
+python3 ~/.config/omarchy/screensaver/cadence-ctl.py status
+python3 ~/.config/omarchy/screensaver/cadence-ctl.py set notifications_enabled false
+```
 
 ## Making banners
 
@@ -148,6 +249,34 @@ Or let Omarchy do it from an image:
 omarchy-branding-screensaver image    # Setup > Style > Screensaver > Set From Image
 omarchy-branding-screensaver reset    # back to the Omarchy wordmark
 ```
+
+## Idle
+
+Out of the box, **idle still shows Omarchy's own screensaver**: the idle service
+lives in a read-only built-in shell plugin, and `/usr/share/omarchy/bin` is first
+in `PATH`, so a `~/.local/bin` shim cannot shadow it by default. To route idle
+through cadence:
+
+```bash
+# ~/.local/bin/omarchy-launch-screensaver
+if [[ "${OMARCHY_SCREENSAVER:-}" == "upstream" ]]; then
+  omarchy_path="${OMARCHY_PATH:-/usr/share/omarchy}"
+  exec "$omarchy_path/bin/omarchy-launch-screensaver" "$@"
+fi
+exec omarchy-launch-screensaver-cadence "$@"
+```
+
+```bash
+# ~/.bash_profile -- must test for ~/.local/bin being *first*, not merely present,
+# because it is already in the inherited PATH further down.
+case ":$PATH:" in
+  "$HOME/.local/bin:"*) ;;
+  *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+```
+
+Then `omarchy-shell shell reload`. The escape hatch is
+`OMARCHY_SCREENSAVER=upstream`.
 
 ## Gotchas
 
