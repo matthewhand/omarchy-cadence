@@ -12,8 +12,8 @@ set notify_cycles=6
 # 1. Static word art.
 text ~/.config/omarchy/branding/screensaver.txt
 
-# 2. Image, transcoded to ASCII and cached by mtime. Skipped until grok
-#    delivers the SVG.
+# 2. A folder of images, transcoded to ASCII and cached by mtime. Drop a file in
+#    and it joins the rotation within ~20s; the folder is never written to.
 images ~/Pictures/cadence-slides braille
 
 # 3. Clock, date and weather, re-rendered every rotation.
