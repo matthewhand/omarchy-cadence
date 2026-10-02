@@ -40,14 +40,14 @@ workflows to render banners.
 ## Use
 
 ```bash
-omarchy-launch-cadence          # full screen, every monitor
-omarchy-cadence --dump          # print every slide's art and exit
+omarchy-launch-screensaver-cadence          # full screen, every monitor
+omarchy-screensaver-cadence --dump          # print every slide's art and exit
 ```
 
 Any key or click exits and restores the cursor. A suggested Hyprland bind:
 
 ```lua
-o.bind("SUPER + SHIFT + C", "Cadence screensaver", "omarchy-launch-cadence")
+o.bind("SUPER + SHIFT + C", "Cadence screensaver", "omarchy-launch-screensaver-cadence")
 ```
 
 ## Slides

@@ -3,7 +3,7 @@
 # omarchy:summary=Launch the rotating slideshow screensaver on every monitor.
 
 # Mirrors omarchy-launch-screensaver (read-only in /usr/share/omarchy) but runs
-# omarchy-cadence instead of the single-art omarchy-screensaver.
+# omarchy-screensaver-cadence instead of the single-art omarchy-screensaver.
 
 if omarchy-cmd-missing ttfx; then
   exit 1
@@ -59,16 +59,16 @@ for m in $(hyprctl monitors -j | jq -r '.[] | .name'); do
 
   case $terminal in
   *Alacritty*)
-    hypr_exec alacritty --class=org.omarchy.screensaver --config-file "$OMARCHY_PATH/default/alacritty/screensaver.toml" -e omarchy-cadence
+    hypr_exec alacritty --class=org.omarchy.screensaver --config-file "$OMARCHY_PATH/default/alacritty/screensaver.toml" -e omarchy-screensaver-cadence
     ;;
   *ghostty*)
-    hypr_exec ghostty --class=org.omarchy.screensaver --config-file="$OMARCHY_PATH/default/ghostty/screensaver" --font-size=18 -e omarchy-cadence
+    hypr_exec ghostty --class=org.omarchy.screensaver --config-file="$OMARCHY_PATH/default/ghostty/screensaver" --font-size=18 -e omarchy-screensaver-cadence
     ;;
   *foot*)
-    hypr_exec foot --app-id=org.omarchy.screensaver --config="$OMARCHY_PATH/default/foot/screensaver.ini" -e omarchy-cadence
+    hypr_exec foot --app-id=org.omarchy.screensaver --config="$OMARCHY_PATH/default/foot/screensaver.ini" -e omarchy-screensaver-cadence
     ;;
   *kitty*)
-    hypr_exec kitty --class=org.omarchy.screensaver --override font_size=18 --override window_padding_width=0 -e omarchy-cadence
+    hypr_exec kitty --class=org.omarchy.screensaver --override font_size=18 --override window_padding_width=0 -e omarchy-screensaver-cadence
     ;;
   esac
 

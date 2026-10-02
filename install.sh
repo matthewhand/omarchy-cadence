@@ -36,9 +36,9 @@ command -v omarchy-transcode-ascii >/dev/null || {
 ((missing == 0)) || exit 1
 
 mkdir -p "$bin" "$config" "$unit_dir"
-install -m 755 "$repo/bin/omarchy-cadence" "$repo/bin/omarchy-launch-cadence" "$bin/"
+install -m 755 "$repo/bin/omarchy-screensaver-cadence" "$repo/bin/omarchy-launch-screensaver-cadence" "$bin/"
 install -m 644 "$repo/helpers/"*.py "$config/"
-echo "installed: $bin/omarchy-cadence, $bin/omarchy-launch-cadence"
+echo "installed: $bin/omarchy-screensaver-cadence, $bin/omarchy-launch-screensaver-cadence"
 
 if [[ -f "$config/slides" ]]; then
   echo "kept existing slide list: $config/slides"
@@ -61,8 +61,8 @@ cat <<'EOF'
 
 Next:
   1. Review the slide list:      ~/.config/omarchy/screensaver/slides
-  2. Preview without fullscreen:  omarchy-cadence --dump
-  3. Start it:                    omarchy-launch-cadence
+  2. Preview without fullscreen:  omarchy-screensaver-cadence --dump
+  3. Start it:                    omarchy-launch-screensaver-cadence
 
 Cadence is installed as its own command because /usr/share/omarchy/bin is first
 in PATH, so a ~/.local/bin/omarchy-screensaver could never shadow Omarchy's own.
