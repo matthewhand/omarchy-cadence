@@ -1,0 +1,53 @@
+# Cadence -- rotating ASCII screensaver for Omarchy.
+#
+# This file is the source of truth. `state.json` next to it holds the current
+# position of the bar widget's toggles, so switching notifications off in the bar
+# never rewrites this file or loses the comments in it. Delete state.json to go
+# back to what is written here.
+
+# Seconds each slide stays on screen.
+interval: 20
+
+# Terminal budget. Every slide must fit inside width x height cells.
+mode: braille
+width: 80
+height: 26
+
+# Desktop notifications as a slide. A notification is shown `cycles` times before
+# it retires, so it lingers instead of flashing past. Toggle from the bar widget.
+notifications:
+  enabled: true
+  cycles: 6
+
+# One or more ASCII art files, used as-is.
+ascii:
+  - ~/.config/omarchy/branding/screensaver.txt
+
+# One or more images, transcoded to ASCII on demand and cached by mtime.
+image:
+  - ~/Pictures/smiley-crossed-eyes.svg
+
+# One or more folders of images. Anything dropped in joins the rotation within
+# about 20 seconds, and the folder itself is never written to.
+images:
+  - ~/Pictures/cadence-slides
+
+# Anything that can print ASCII to stdout becomes a slide, re-run every rotation.
+# The bundled helpers are examples; the path is resolved by the config location.
+dynamic:
+  - command: python3 ~/.config/omarchy/screensaver/stats-slide.py
+  - command: python3 ~/.config/omarchy/screensaver/herdr-slide.py
+
+# --- priority ---------------------------------------------------------------
+#
+# `primary` rotates on its own while any of its slides can be produced. When none
+# can -- no notification queued -- cadence falls back to `fallback` instead of
+# showing an empty screen. So notifications take over the screen when there are
+# any, and the clock, images and word art return when there are not.
+primary:
+  - notify
+
+fallback:
+  - command: python3 ~/.config/omarchy/screensaver/stats-slide.py
+  - images: ~/Pictures/cadence-slides
+  - ascii: ~/.config/omarchy/branding/screensaver.txt

@@ -40,11 +40,17 @@ install -m 755 "$repo/bin/omarchy-screensaver-cadence" "$repo/bin/omarchy-launch
 install -m 644 "$repo/helpers/"*.py "$config/"
 echo "installed: $bin/omarchy-screensaver-cadence, $bin/omarchy-launch-screensaver-cadence"
 
-if [[ -f "$config/slides" ]]; then
-  echo "kept existing slide list: $config/slides"
+if [[ -f "$config/cadence.yaml" ]]; then
+  echo "kept existing config: $config/cadence.yaml"
 else
+  install -m 644 "$repo/config/cadence.yaml" "$config/cadence.yaml"
+  echo "installed config: $config/cadence.yaml"
+fi
+
+# The line format still works, but only as a fallback for configs that predate
+# cadence.yaml. Kept so an existing install does not lose its slide list.
+if [[ ! -f "$config/slides" && ! -f "$config/cadence.yaml" ]]; then
   install -m 644 "$repo/config/slides" "$config/slides"
-  echo "installed slide list: $config/slides"
 fi
 
 if $with_watcher; then

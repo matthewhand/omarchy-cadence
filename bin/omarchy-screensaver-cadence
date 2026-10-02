@@ -30,6 +30,9 @@
 set -uo pipefail
 
 SLIDES_CONF="${OMARCHY_SCREENSAVER_SLIDES:-$HOME/.config/omarchy/screensaver/slides}"
+# YAML config, preferred when present. The line format above stays valid input.
+CONFIG_YAML="${OMARCHY_SCREENSAVER_CONFIG:-$HOME/.config/omarchy/screensaver/cadence.yaml}"
+STATE_FILE="${OMARCHY_SCREENSAVER_STATE:-$HOME/.config/omarchy/screensaver/state.json}"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/cadence"
 HELPERS="$HOME/.config/omarchy/screensaver"
 
@@ -43,15 +46,51 @@ dir_stamp=""
 
 QUEUE="$CACHE_DIR/notifications.jsonl"
 
-slide_specs=()
+primary_specs=()
+fallback_specs=()
 watch_dirs=()
 
 expand_tilde() { printf '%s' "${1/#\~/$HOME}"; }
 
+# bash cannot parse YAML without extra tooling, so cadence-config.py reads it and
+# prints the same line format this script already understands. One parser, and the
+# original format keeps working for anyone who prefers it.
+resolve_plan() {
+  local out="$CACHE_DIR/resolved.plan"
+  mkdir -p "$CACHE_DIR"
+  python3 "$HELPERS/cadence-config.py" --config "$CONFIG_YAML" --state "$STATE_FILE" \
+    >"$out" 2>/dev/null && [[ -s "$out" ]] || return 1
+}
+
+config_source() {
+  if [[ -r "$CONFIG_YAML" ]] && resolve_plan; then
+    printf '%s' "$CACHE_DIR/resolved.plan"
+  else
+    [[ -r "$SLIDES_CONF" ]] || printf '%s' "$CONFIG_YAML"
+    [[ -r "$SLIDES_CONF" ]] || return 1
+    printf '%s' "$SLIDES_CONF"
+  fi
+}
+
+# Slides live in one of two groups. `primary` rotates on its own while any of its
+# slides can be produced; otherwise cadence rotates `fallback`. Configs written
+# before groups existed have no group lines, so everything lands in fallback and
+# behaves exactly as it did.
+add_spec() {
+  if [[ "$target" == "primary" ]]; then
+    primary_specs+=("$1")
+  else
+    fallback_specs+=("$1")
+  fi
+}
+
 parse_conf() {
-  local line kind value dir dir_mode found
-  slide_specs=()
+  local line kind value dir dir_mode found source
+  primary_specs=()
+  fallback_specs=()
+  target="fallback"
   watch_dirs=()
+  source=$(config_source) || { printf 'omarchy-screensaver-cadence: no usable config\n' >&2; return 1; }
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line%%#*}"
     line="${line#"${line%%[![:space:]]*}"}"
@@ -68,7 +107,13 @@ parse_conf() {
           notify_cycles) notify_cycles="${value#*=}" ;;
         esac
         ;;
-      text | image | exec | notify) slide_specs+=("$kind $value") ;;
+      group)
+        case "$value" in
+          primary) target="primary" ;;
+          *) target="fallback" ;;
+        esac
+        ;;
+      text | image | exec | notify) add_spec "$kind $value" ;;
       images)
         # A whole directory of images, expanded to one slide per file in name
         # order. Nothing is written back into that directory: every transcode
@@ -79,9 +124,9 @@ parse_conf() {
         watch_dirs+=("$dir")
         while IFS= read -r found; do
           if [[ -n "$dir_mode" ]]; then
-            slide_specs+=("image $found $dir_mode")
+            add_spec "image $found $dir_mode"
           else
-            slide_specs+=("image $found")
+            add_spec "image $found"
           fi
         done < <(find "$dir" -maxdepth 1 -type f \
           \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \
@@ -89,18 +134,17 @@ parse_conf() {
         ;;
       *) printf 'omarchy-screensaver-cadence: ignoring unknown entry: %s\n' "$line" >&2 ;;
     esac
-  done <"$SLIDES_CONF"
+  done <"$source"
 }
 
 # Render one slide to a file and echo its path. Returns 1 if the slide cannot be
 # produced, so the caller can skip it instead of showing a blank screen.
 materialise() {
-  local index=$1 spec kind arg out key flags slide_mode
-  spec="${slide_specs[$index]}"
+  local spec=$1 cache_id=$2 kind arg out key flags slide_mode
   kind="${spec%% *}"
   arg="$(expand_tilde "${spec#* }")"
-  out="$CACHE_DIR/slide-$index.txt"
-  flags="$CACHE_DIR/slide-$index.flags"
+  out="$CACHE_DIR/art-$cache_id.txt"
+  flags="$CACHE_DIR/art-$cache_id.flags"
   rm -f "$flags"
 
   case "$kind" in
@@ -161,22 +205,27 @@ parse_conf
 # --dump prints every slide's art and exits, so the list can be checked without
 # taking over the screen.
 if [[ "${1:-}" == "--dump" ]]; then
-  for i in "${!slide_specs[@]}"; do
-    if art=$(materialise "$i"); then
-      printf -- '--- slide %d: %s ---\n' "$i" "${slide_specs[$i]}"
-      cat "$art"
-      flags="$CACHE_DIR/slide-$i.flags"
-      [[ -s "$flags" ]] && printf -- '    ttfx flags: %s\n' "$(cat "$flags")"
-    else
-      printf -- '--- slide %d: %s ---\n    SKIPPED (unreadable, empty or exhausted)\n' "$i" "${slide_specs[$i]}"
-    fi
+  for group in primary fallback; do
+    [[ "$group" == "primary" ]] && specs=("${primary_specs[@]}") || specs=("${fallback_specs[@]}")
+    ((${#specs[@]} == 0)) && continue
+    printf -- '=== %s (%d slide(s)) ===\n' "$group" "${#specs[@]}"
+    for i in "${!specs[@]}"; do
+      if art=$(materialise "${specs[$i]}" "${group:0:1}$i"); then
+        printf -- '--- %s: %s ---\n' "$group" "${specs[$i]}"
+        cat "$art"
+        flags="$CACHE_DIR/art-${group:0:1}$i.flags"
+        [[ -s "$flags" ]] && printf -- '    ttfx flags: %s\n' "$(cat "$flags")"
+      else
+        printf -- '--- %s: %s ---\n    SKIPPED (unreadable, empty or exhausted)\n' "$group" "${specs[$i]}"
+      fi
+    done
   done
   exit 0
 fi
 
 # With no usable slides, behave exactly like upstream rather than showing nothing.
-if ((${#slide_specs[@]} == 0)); then
-  slide_specs=("text $HOME/.config/omarchy/branding/screensaver.txt")
+if ((${#primary_specs[@]} == 0 && ${#fallback_specs[@]} == 0)); then
+  fallback_specs=("text $HOME/.config/omarchy/branding/screensaver.txt")
 fi
 
 printf '\033]11;rgb:00/00/00\007' # Set background color to black
@@ -203,6 +252,10 @@ wait_for_terminal_resize
 # images, with no restart and no reloading of the config by hand.
 rescan_if_changed() {
   local current="" d
+  # Config and toggle state first, so editing cadence.yaml or flipping a bar
+  # toggle takes effect without a restart.
+  current+="yaml:$(stat -c %Y "$CONFIG_YAML" 2>/dev/null || echo 0)"
+  current+="state:$(stat -c %Y "$STATE_FILE" 2>/dev/null || echo 0)"
   for d in "${watch_dirs[@]}"; do
     current+="$d:$(stat -c %Y "$d" 2>/dev/null || echo 0)"
   done
@@ -212,20 +265,58 @@ rescan_if_changed() {
   return 0
 }
 
-index=0
+# Pick the next slide to show. Primary is tried first and on its own: while any
+# primary slide can be produced only those rotate, so a queued notification takes
+# over the screen. When none can be produced the fallback group takes over, which
+# is what stops a primary group like `notify` from leaving the screen empty.
+choose_slide() {
+  local group specs count i idx cursor art
+  for group in primary fallback; do
+    if [[ "$group" == "primary" ]]; then
+      specs=("${primary_specs[@]}")
+      cursor=$p_index
+    else
+      specs=("${fallback_specs[@]}")
+      cursor=$f_index
+    fi
+    count=${#specs[@]}
+    ((count == 0)) && continue
+    for ((i = 0; i < count; i++)); do
+      idx=$(((cursor + i) % count))
+      if art=$(materialise "${specs[$idx]}" "${group:0:1}$idx"); then
+        if [[ "$group" == "primary" ]]; then
+          p_index=$(((idx + 1) % count))
+        else
+          f_index=$(((idx + 1) % count))
+        fi
+        chosen_id="${group:0:1}$idx"
+        printf '%s' "$art"
+        return 0
+      fi
+    done
+  done
+  return 1
+}
+
+p_index=0
+f_index=0
+chosen_id=""
 failures=0
 next_rescan=$SECONDS
 while true; do
   if ((SECONDS >= next_rescan)); then
     next_rescan=$((SECONDS + 20))
-    rescan_if_changed && index=0
+    rescan_if_changed
   fi
 
   art=""
-  if art=$(materialise "$index"); then
+  chosen_id=""
+  if art=$(choose_slide); then
     failures=0
-    slide_flags="$CACHE_DIR/slide-$index.flags"
-    if [[ -s "$slide_flags" ]]; then
+    # choose_slide records which slide it picked, so its ttfx flags are known
+    # without having to match cache files by content.
+    slide_flags="$CACHE_DIR/art-$chosen_id.flags"
+    if [[ -n "$slide_flags" && -s "$slide_flags" ]]; then
       flags_arg=$(cat "$slide_flags")
     elif [[ -n "$effects" ]]; then
       flags_arg="$effects"
@@ -245,13 +336,12 @@ while true; do
     # whole interval. If every slide is unusable, fall back to waiting one
     # interval so this cannot spin.
     failures=$((failures + 1))
-    if ((failures >= ${#slide_specs[@]})); then
+    if ((failures >= ${#primary_specs[@]} + ${#fallback_specs[@]})); then
       sleep "$interval"
       failures=0
     else
       sleep 0.2
     fi
-    index=$(((index + 1) % ${#slide_specs[@]}))
     continue
   fi
 
@@ -267,6 +357,4 @@ while true; do
 
   kill "$ttfx_pid" 2>/dev/null
   wait "$ttfx_pid" 2>/dev/null
-
-  index=$(((index + 1) % ${#slide_specs[@]}))
 done
