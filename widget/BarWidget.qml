@@ -31,6 +31,38 @@ BarWidget {
   moduleName: "matthewh.cadence"
 
   readonly property string helpers: (Quickshell.env("HOME") || "") + "/.config/omarchy/screensaver"
+  readonly property string aiCache: (Quickshell.env("HOME") || "") + "/.cache/omarchy/cadence/ai"
+
+  // The AI slides' current text, read straight from the cache files.
+  //
+  // FileView rather than shelling out to `ai-slides.py status` on the poll: these
+  // are small files that change a few times a day, so watching them costs
+  // nothing, whereas a status call per tick would be another process every four
+  // seconds. onFileChanged is what makes the field update by itself after a
+  // regeneration, with no reload of the shell.
+  property string aiHaiku: ""
+  property string aiTerse: ""
+
+  function refreshAi() {
+    haikuView.reload()
+    terseView.reload()
+  }
+
+  FileView {
+    id: haikuView
+    path: root.aiCache + "/haiku.txt"
+    watchChanges: true
+    onLoaded: root.aiHaiku = String(text() || "").trim()
+    onFileChanged: reload()
+  }
+
+  FileView {
+    id: terseView
+    path: root.aiCache + "/terse.txt"
+    watchChanges: true
+    onLoaded: root.aiTerse = String(text() || "").trim()
+    onFileChanged: reload()
+  }
 
   property int slides: 0
   property bool configured: false

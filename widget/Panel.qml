@@ -166,6 +166,60 @@ Panel {
     }
   }
 
+    // What the AI slides are currently saying. Read-only on purpose: the text is
+    // generated, so anything typed here would be silently overwritten by the next
+    // generation. Blank means nothing is cached, and the slide is being skipped
+    // -- say that rather than showing an empty box.
+    PanelSectionHeader {
+      Layout.leftMargin: Style.space(10)
+      Layout.topMargin: Style.space(8)
+      text: "AI slides"
+    }
+
+    Column {
+      Layout.fillWidth: true
+      Layout.leftMargin: Style.space(10)
+      Layout.rightMargin: Style.space(10)
+      Layout.topMargin: Style.space(2)
+      spacing: Style.space(6)
+
+      Repeater {
+        model: [
+          { label: "haiku", body: root.aiHaiku },
+          { label: "terse", body: root.aiTerse },
+        ]
+
+        Column {
+          required property var modelData
+          width: parent.width
+          spacing: 0
+
+          Text {
+            width: parent.width
+            text: modelData.label
+            color: Qt.darker(root.bar.foreground, 1.5)
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+
+          Text {
+            width: parent.width
+            text: modelData.body !== ""
+              ? modelData.body
+              : "nothing cached yet - this slide is skipped"
+            color: modelData.body !== ""
+              ? Util.alpha(root.bar.foreground, 0.75)
+              : Qt.darker(root.bar.foreground, 1.9)
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
+            maximumLineCount: 4
+            elide: Text.ElideRight
+          }
+        }
+      }
+    }
+
   CursorSurface {
     id: previewRow
     Layout.fillWidth: true
