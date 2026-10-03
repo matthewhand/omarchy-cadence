@@ -1,0 +1,10 @@
+[Unit]
+Description=Cadence AI slide generation (rate limited)
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+# Seed first: it only fills empty caches, so a generation failure can never leave
+# a style with nothing to show.
+ExecStart=/usr/bin/python3 %h/.config/omarchy/screensaver/ai-slides.py seed
+ExecStart=/usr/bin/python3 %h/.config/omarchy/screensaver/ai-slides.py generate-all

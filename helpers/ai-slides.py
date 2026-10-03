@@ -345,9 +345,19 @@ def cmd_print(config, style):
         return 1
     cached = read_cache(style)
     if not cached:
-        # Nothing yet. Stay silent rather than print a placeholder: the runner
-        # treats empty output as "this slide cannot be produced" and moves on.
-        return 1
+        # Belt and braces. `seed` normally puts the bundled default in the cache,
+        # but if the cache was cleared, or this is a fresh install where seed
+        # never ran, fall back to the default text inline rather than showing
+        # nothing. Plain text rather than the banner: the banner costs seconds and
+        # this path has to stay instant.
+        default = str(entry.get("default_text") or "").strip()
+        if not default:
+            # No default and nothing cached: genuinely nothing to show. Stay
+            # silent, because the runner reads empty output as "this slide cannot
+            # be produced" and moves on.
+            return 1
+        sys.stdout.write(render(entry, [l for l in default.splitlines() if l.strip()]))
+        return 0
     try:
         with open(banner_path(style), encoding="utf-8") as handle:
             banner = handle.read()

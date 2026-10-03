@@ -1,0 +1,12 @@
+[Unit]
+Description=Hourly check for due Cadence AI slides
+
+[Timer]
+# Hourly, but the helper enforces the real cap (1440 minutes by default), so this
+# frequency only decides how soon after a cap expiry the slide refreshes.
+OnBootSec=5min
+OnUnitActiveSec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

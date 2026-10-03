@@ -53,6 +53,15 @@ install -m 644 \
 install -m 755 "$repo/helpers/ai-slides.py" "$config/"
 echo "installed: $bin/omarchy-screensaver-cadence, $bin/omarchy-launch-screensaver-cadence and helpers"
 
+# Seed the AI slides so a fresh install has something to show before the first
+# generation, and so a failing backend cannot leave them empty.
+python3 "$config/ai-slides.py" seed >/dev/null 2>&1 || true
+
+# Seed the AI slides so a fresh install has something to show before the first
+# generation, and so a failing backend can never leave them empty. Only fills an
+# empty cache, so this never overwrites real model output.
+python3 "$config/ai-slides.py" seed >/dev/null 2>&1 || true
+
 if [[ -f "$config/cadence.yaml" ]]; then
   echo "kept existing config: $config/cadence.yaml"
 else
@@ -95,7 +104,8 @@ else
 fi
 
 if $with_watcher; then
-  install -m 644 "$repo/systemd/cadence-notify-watch.service" "$unit_dir/"
+  install -m 644 "$repo/systemd/cadence-ai-slides.service" "$unit_dir/"
+  install -m 644 "$repo/systemd/cadence-ai-slides.timer" "$unit_dir/"
   systemctl --user daemon-reload
   systemctl --user enable --now cadence-notify-watch.service
   echo "installed and started: cadence-notify-watch.service (desktop notifications)"

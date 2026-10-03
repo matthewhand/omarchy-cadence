@@ -35,6 +35,12 @@ images:
 # Anything that can print ASCII to stdout becomes a slide, re-run every rotation.
 # The bundled helpers are examples; the path is resolved by the config location.
 dynamic:
+  # AI-generated slides. These only ever read a cached file -- they never call a
+  # model from the screensaver -- and say nothing until the first generation has
+  # happened, at which point the runner skips them. See ai-slides.jsonc for the
+  # prompts and the rate limit.
+  - command: python3 ~/.config/omarchy/screensaver/ai-slides.py print haiku
+  - command: python3 ~/.config/omarchy/screensaver/ai-slides.py print terse
   - command: python3 ~/.config/omarchy/screensaver/stats-slide.py
   - command: python3 ~/.config/omarchy/screensaver/herdr-slide.py
 
@@ -48,6 +54,9 @@ primary:
   - notify
 
 fallback:
+  # The AI slides lead: they are the ones that change.
+  - command: python3 ~/.config/omarchy/screensaver/ai-slides.py print haiku
+  - command: python3 ~/.config/omarchy/screensaver/ai-slides.py print terse
   - command: python3 ~/.config/omarchy/screensaver/stats-slide.py
   - images: ~/Pictures/cadence-slides
   - ascii: ~/.config/omarchy/branding/screensaver.txt
