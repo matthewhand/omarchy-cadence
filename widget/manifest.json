@@ -6,9 +6,11 @@
   "author": "matthewh",
   "license": "MIT",
   "description": "Bar widget for omarchy-screensaver-cadence: slide count, start/stop, notifications toggle, config editor",
-  "kinds": ["bar-widget"],
+  "kinds": [
+    "bar-widget"
+  ],
   "entryPoints": {
-    "barWidget": "CadenceWidget.qml"
+    "barWidget": "BarWidget.qml"
   },
   "barWidget": {
     "displayName": "Cadence",

@@ -72,7 +72,8 @@ if $with_widget; then
   # registered with the shell rather than just copied somewhere.
   plugin="$HOME/.config/omarchy/plugins/matthewh.cadence"
   mkdir -p "$plugin"
-  install -m 644 "$repo/widget/manifest.json" "$repo/widget/CadenceWidget.qml" "$plugin/"
+  install -m 644 "$repo/widget/manifest.json" "$repo/widget/BarWidget.qml" "$repo/widget/Panel.qml" "$plugin/"
+  rm -f "$plugin/CadenceWidget.qml"
   if command -v omarchy-shell-config >/dev/null; then
     # Register through omarchy-shell-config rather than editing shell.json by hand:
     # it is the supported path and keeps the bar layout intact. The jq program is
