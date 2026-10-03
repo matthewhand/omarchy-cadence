@@ -1,0 +1,59 @@
+{
+  // AI-generated slides for the cadence screensaver.
+  //
+  // Each style is a prompt plus a cap. The cap is the point of this file: an
+  // unbounded screensaver that calls a coding agent is a quiet way to spend a
+  // subscription, so generation is rate limited per style and only ever happens
+  // from the timer, never while the screensaver is on screen.
+  //
+  // JSONC, not YAML, so these comments survive - see the note in
+  // ~/omarchy.local/AGENTS.md about preferring JSONC for greenfield config.
+
+  // Fallback cap for a style that does not set its own. 1440 minutes = daily.
+  "default_interval_minutes": 1440,
+
+  // Hard stop on a backend call. A hung agent must not hold the timer forever.
+  "timeout_seconds": 180,
+
+  // How the model is called.
+  //
+  // argv list; the prompt is appended as the final argument. It is configured
+  // here rather than hardcoded because agent CLIs disagree about running
+  // without a terminal:
+  //
+  //   * `omarchy-agent --prompt` is Omarchy's sanctioned entry point but it
+  //     execs the agent's TUI. Under a PTY, grok renders a spinner and never
+  //     exits, so a timer would hang. Do not point this at it.
+  //   * `crush run "<prompt>"` is genuinely one-shot (Omarchy notes it "never
+  //     prompts") but needs `crush` to have a provider configured.
+  //   * `codex exec --skip-git-repo-check "<prompt>"` is one-shot; the flag is
+  //     needed because this runs outside a trusted repo.
+  //
+  // Leave this null to disable generation entirely - the slides then keep
+  // showing whatever was cached last, and `status` reports the reason.
+  "command": ["/tmp/opencode/stub-haiku.sh"],
+
+  "styles": {
+    "haiku": {
+      "enabled": true,
+      "interval_minutes": 1440,
+      "banner_squeeze": 55,
+      "banner_mode": "braille",
+      // Shown until the first successful generation, and kept if generation keeps
+      // failing, so the slide is never blank. This is bundled text, not model
+      // output -- it is replaced the moment a real generation succeeds.
+      "default_text": "help i am trapped in a screensaver\nthe cursor blinks on\nnobody sets me free",
+      "prompt": "Write one original haiku about computers, terminals or linux. Rules: exactly three lines, 5-7-5 syllables, lowercase, no punctuation, no title, no explanation, no hashtags. Reply with the three lines and nothing else."
+    },
+
+    "terse": {
+      "enabled": true,
+      "interval_minutes": 1440,
+      "banner_squeeze": 55,
+      "banner_mode": "braille",
+      // Bundled text, not model output. Same role as the haiku default.
+      "default_text": "help i am trapped in a fortune cookie factory",
+      "prompt": "Write one short funny sentence about being a computer, a terminal, or a program. Rules: at most twelve words, deadpan, lowercase, no punctuation at the end, no explanation, no hashtags. Reply with the single sentence and nothing else."
+    }
+  }
+}

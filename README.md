@@ -32,6 +32,61 @@ configured `ascii` and `images` slides.
 
 ![cadence rotating through stats, herdr, image and ascii slides](hero-rotation.gif)
 
+## AI slides
+
+Two extra slide types whose text is generated rather than written by you:
+
+- **haiku** — three lines, 5-7-5, about computers
+- **terse** — one deadpan sentence, at most twelve words
+
+Both are rate limited so a screensaver cannot quietly spend an agent
+subscription. `interval_minutes` defaults to 1440, i.e. one generation per style
+per day, and generation only ever runs from the systemd timer, never from the
+slide itself. Configure prompts, caps and the backend in `ai-slides.jsonc`.
+
+```sh
+ai-slides.py status          # per-style: due? cached? last error?
+ai-slides.py generate-all    # refresh whatever is due
+ai-slides.py seed            # fill empty caches with the bundled defaults
+```
+
+### The slides never block the screensaver
+
+`print` only ever reads a file. It cannot call a model, so a slow or hung
+backend can never freeze the rotation -- and that is not theoretical:
+`omarchy-agent --prompt` execs the agent's TUI, which renders and waits rather
+than answering once, so a timer pointed at it would hang forever. The backend is
+therefore configured explicitly, and `crush run` or `codex exec
+--skip-git-repo-check` are known to work; `omarchy-agent --prompt` does not.
+
+### Bundled defaults
+
+Each style ships a `default_text`, so a fresh install shows something instead of
+a blank slide, and a backend that keeps failing never empties the rotation. The
+default is bundled text, **not** model output, and `seed` only ever fills an
+empty cache -- the first real generation replaces it.
+
+### Sizing
+
+The generated text is rendered as a large braille banner via `word-banner.sh`,
+the same renderer behind `WORD=SurfaceBook`, rather than the 6x8 block font --
+that font exits on any glyph outside `A-Z0-9` and refuses text over about 13
+characters. The banner is built once during `generate` and cached, because
+`print` has to stay instant. If the combined art would exceed the screen height,
+it falls back to centred plain text.
+
+### Image slides
+
+`image:` and `images:` accept SVG as well as PNG, transcoded by
+`omarchy-transcode-ascii`. That converter only sees dark pixels as ink, so
+colour is meaningless there -- the Bauhaus generator draws black-on-white for
+that reason. `bauhaus-svg.py` writes a seeded composition into the watched
+directory, where cadence picks it up on the next pass.
+
+It is a procedural stand-in for an image-generating backend, not one: a real
+backend would ask a model for a composition. Both need the same headless agent
+path, which is the part still outstanding.
+
 ## Install
 
 ```bash

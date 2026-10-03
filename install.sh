@@ -40,6 +40,8 @@ command -v omarchy-transcode-ascii >/dev/null || {
 mkdir -p "$bin" "$config" "$unit_dir"
 install -m 755 "$repo/bin/omarchy-screensaver-cadence" "$repo/bin/omarchy-launch-screensaver-cadence" "$bin/"
 install -m 644 \
+  "$repo/helpers/ai-slides.jsonc" \
+  "$repo/helpers/bauhaus-svg.py" \
   "$repo/helpers/cadence-config.py" \
   "$repo/helpers/cadence-ctl.py" \
   "$repo/helpers/herdr-slide.py" \
@@ -48,6 +50,7 @@ install -m 644 \
   "$repo/helpers/stats-slide.py" \
   "$repo/helpers/wordfont.py" \
   "$config/"
+install -m 755 "$repo/helpers/ai-slides.py" "$config/"
 echo "installed: $bin/omarchy-screensaver-cadence, $bin/omarchy-launch-screensaver-cadence and helpers"
 
 if [[ -f "$config/cadence.yaml" ]]; then
