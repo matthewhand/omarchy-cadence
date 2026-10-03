@@ -20,7 +20,17 @@ upstream. Cadence ships as a separate command instead, alongside the original.
 
 ## Demo
 
-![cadence rotating through slides](hero.gif)
+A PNG transcoded to braille cells, and the live clock slide:
+
+![cadence rendering a smiley SVG and the clock](hero.gif)
+
+A full `primary` -> `fallback` rotation on one monitor, recorded at one frame per
+second and played back at 8fps. You are seeing the real screensaver sampled over
+90 seconds, not an edited demo: the stats slide is live `btop` output, the green
+readout is a `herdr` session, and the starfield and word art come from the
+configured `ascii` and `images` slides.
+
+![cadence rotating through stats, herdr, image and ascii slides](hero-rotation.gif)
 
 ## Install
 
