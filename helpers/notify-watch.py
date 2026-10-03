@@ -42,14 +42,24 @@ def append(app, summary, body):
     os.makedirs(os.path.dirname(QUEUE), exist_ok=True)
     with open(QUEUE, "a") as handle:
         handle.write(json.dumps(entry) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
 
     # Trim the tail so the queue cannot grow without bound.
+    #
+    # Written to a temp file and renamed, not truncated in place. Truncating with
+    # open(QUEUE, "w") leaves the file empty or half-written for as long as the
+    # rewrite takes, and this watcher runs continuously against the same file the
+    # notify slide rewrites -- so a notification arriving in that window was lost,
+    # and a reader could see a truncated file. os.replace is atomic.
     try:
         with open(QUEUE) as handle:
             rows = [line for line in handle if line.strip()]
         if len(rows) > KEEP:
-            with open(QUEUE, "w") as handle:
+            tmp = QUEUE + ".tmp"
+            with open(tmp, "w") as handle:
                 handle.writelines(rows[-KEEP:])
+            os.replace(tmp, QUEUE)
     except OSError:
         pass
     print(f"queued: {entry['app']}: {summary[:60]}", flush=True)
